@@ -1,0 +1,76 @@
+## Data Prepration ##
+## Pipeline ##
+
+from sklearn.pipeline import Pipeline, FeatureUnion
+
+### faetures and label
+housing_copy = housing.copy()
+label = housing_copy["median_house_value"].copy()
+features = housing_copy.drop("median_house_value", axis=1)
+
+### Build train set and test set
+features_train, features_test, label_train, label_test = train_test_split(features, label, test_size=0.2, random_state=0)
+
+### Select numerical and categorical data seperately
+class NumNames():
+    def __init__(self, data):
+        self.data = data
+    def fit(self, X, y=None):
+        return self
+    def transform(self,X):
+        X = self.data
+        data_num = X.drop("ocean_proximity", axis=1)
+        num_names = list(data_num.columns)
+        return num_names
+        
+class CatNames():
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        cat_names = ["ocean_proximity"]
+        return cat_names
+
+### Data selector
+class DataSelector():
+    def __init__(self, data):
+        self.data = data
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        z = self.data
+        return z[X].values
+
+## AttributeAggregation
+    ## index = total_rooms: 3, households: 6, total_bedrooms: 4
+class AttributeAggregation():
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        rooms_per_household = X[:,3] / X[:,6]
+        bedrooms_per_room = X[:,4] / X[:,3]
+        return np.c_[X,rooms_per_household, bedrooms_per_room]
+
+def pipeline(data):
+    num_pipeline = Pipeline([
+        ("naming", NumNames(data)),
+        ("selector", DataSelector(data)),
+        ("imputer", SimpleImputer(missing_values=np.nan, strategy="median")),
+        ("aggregator", AttributeAggregation()),
+        ("scaler", StandardScaler())
+    ])
+
+    cat_pipeline = Pipeline([
+        ("naming", CatNames()),
+        ("selector", DataSelector(data)),
+        ("encoder", OneHotEncoder(sparse_output=False))
+    ])
+
+    full_pipeline = FeatureUnion(transformer_list=[
+        ("num_pipeline", num_pipeline),
+        ("cat_pipeline", cat_pipeline)
+    ])
+
+    data_prepared = full_pipeline.fit_transform(data)
+    data_prepared = pd.DataFrame(data_prepared, columns=["longitude","latitude","housing_median_age","total_rooms","total_bedrooms","population","households","median_income",
+                                                        "rooms_per_household","bedrooms_per_room","1H_OCEAN","INLAND","ISLAND","NEAR_BAY","NEAR_OCEAN"])
+    return data_prepared
